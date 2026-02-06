@@ -5,7 +5,7 @@ It handles the following messages:
 - `list_teams`
 - `join_team <user_id> <team_id>`
 - `create_user <username>`
-- `remove_user <user_id>`
+- `delete_user <user_id>`
 - `do_work <user_id>`
 - `start_game`
 - `current_state`
