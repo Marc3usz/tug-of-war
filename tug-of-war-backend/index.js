@@ -207,6 +207,7 @@ class GameRepository {
     setTimeout(() => {
       if (this.phase === 'loading') {
         this.phase = 'in-game';
+        io.emit('current_state_res', { state: 'in-game' });
       }
     }, GAME_START_DELAY);
 
@@ -238,7 +239,12 @@ class GameRepository {
 }
 
 // Initialize server
-const io = new Server(PORT);
+const io = new Server(PORT, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+  }
+});
 const repo = new GameRepository();
 
 console.log(`Socket.IO server running on port ${PORT}`);
@@ -248,7 +254,7 @@ io.on('connection', (socket) => {
 
   socket.on('list_teams', () => {
     const teams = repo.getAllTeams();
-    socket.emit('list_team_res', teams);
+    socket.emit('list_teams_res', teams);
   });
 
   socket.on('create_user', (username) => {

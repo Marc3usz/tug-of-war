@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { io, Socket } from 'socket.io-client'
 import './App.css'
 
 interface Team {
-  team_id: number
+  team_id: string
   team_name: string
   player_names: string[]
 }
@@ -22,8 +22,8 @@ interface GameState {
 const SOCKET_URL = 'http://localhost:3000' // dostosuj do swojego serwera
 
 function App() {
-  const [socket, setSocket] = useState<Socket | null>(null)
-  const [userId, setUserId] = useState<number | null>(null)
+  const socketRef = useRef<Socket | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [username, setUsername] = useState('')
   const [teams, setTeams] = useState<Team[]>([])
   const [currentTeam, setCurrentTeam] = useState<Team | null>(null)
@@ -36,56 +36,47 @@ function App() {
   // Połączenie z socket.io
   useEffect(() => {
     const newSocket = io(SOCKET_URL)
-    setSocket(newSocket)
+    socketRef.current = newSocket
 
-    return () => {
-      newSocket.close()
-    }
-  }, [])
-
-  // Obsługa eventów socket.io
-  useEffect(() => {
-    if (!socket) return
-
-    socket.on('list_teams_res', (data: Team[]) => {
+    newSocket.on('list_teams_res', (data: Team[]) => {
       setTeams(data)
     })
 
-    socket.on('create_user_res', (data: number) => {
+    newSocket.on('create_user_res', (data: string) => {
       setUserId(data)
     })
 
-    socket.on('current_state_res', (data: GameState) => {
+    newSocket.on('current_state_res', (data: GameState) => {
       setGameState(data)
+      if (data.state !== 'loading') {
+        setCountdown(null)
+      }
     })
 
-    socket.on('game_started', (data: Matchup) => {
+    newSocket.on('game_started', (data: Matchup) => {
       setMatchup(data)
       setWinner(null)
       setRopePosition(0)
       setGameState({ state: 'loading', start_at: data.start_at })
     })
 
-    socket.on('game_state_update', (position: number) => {
+    newSocket.on('game_state_update', (position: number) => {
       setRopePosition(position)
       setGameState({ state: 'in-game' })
+      setCountdown(null)
     })
 
-    socket.on('game_ended', (team: Team) => {
+    newSocket.on('game_ended', (team: Team) => {
       setWinner(team)
       setMatchup(null)
       setGameState({ state: 'intermission' })
+      setCountdown(null)
     })
 
     return () => {
-      socket.off('list_teams_res')
-      socket.off('create_user_res')
-      socket.off('current_state_res')
-      socket.off('game_started')
-      socket.off('game_state_update')
-      socket.off('game_ended')
+      newSocket.close()
     }
-  }, [socket])
+  }, [])
 
   // Countdown timer
   useEffect(() => {
@@ -95,7 +86,6 @@ function App() {
         setCountdown(remaining)
         if (remaining <= 0) {
           clearInterval(interval)
-          setCountdown(null)
         }
       }, 100)
       return () => clearInterval(interval)
@@ -104,43 +94,43 @@ function App() {
 
   // Pobierz listę drużyn po połączeniu
   useEffect(() => {
-    if (socket && userId) {
-      socket.emit('list_teams')
-      socket.emit('current_state')
+    if (socketRef.current && userId) {
+      socketRef.current.emit('list_teams')
+      socketRef.current.emit('current_state')
     }
-  }, [socket, userId])
+  }, [userId])
 
   const createUser = useCallback(() => {
-    if (socket && username.trim()) {
-      socket.emit('create_user', username.trim())
+    if (socketRef.current && username.trim()) {
+      socketRef.current.emit('create_user', username.trim())
     }
-  }, [socket, username])
+  }, [username])
 
-  const joinTeam = useCallback((teamId: number) => {
-    if (socket && userId) {
-      socket.emit('join_team', userId, teamId)
+  const joinTeam = useCallback((teamId: string) => {
+    if (socketRef.current && userId) {
+      socketRef.current.emit('join_team', userId, teamId)
       const team = teams.find(t => t.team_id === teamId)
       setCurrentTeam(team || null)
     }
-  }, [socket, userId, teams])
+  }, [userId, teams])
 
   const doWork = useCallback(() => {
-    if (socket && userId) {
-      socket.emit('do_work', userId)
+    if (socketRef.current && userId) {
+      socketRef.current.emit('do_work', userId)
     }
-  }, [socket, userId])
+  }, [userId])
 
   const startGame = useCallback(() => {
-    if (socket) {
-      socket.emit('start_game')
+    if (socketRef.current) {
+      socketRef.current.emit('start_game')
     }
-  }, [socket])
+  }, [])
 
   const refreshTeams = useCallback(() => {
-    if (socket) {
-      socket.emit('list_teams')
+    if (socketRef.current) {
+      socketRef.current.emit('list_teams')
     }
-  }, [socket])
+  }, [])
 
   // Ekran logowania
   if (userId === null) {
